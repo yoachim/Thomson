@@ -68,6 +68,113 @@ def potential_single(coord0, x, y, z):
     U = np.sum(1./np.sqrt(dsq))
     return U
 
+
+class elec_sphere(object):
+    def __init__(self, x0, y0, z0, x, y, z, fx, fy, fz):
+        """
+        find the potential by moving around a single electron
+        """
+
+        self.x0 = x0
+        self.y0 = y0
+        self.z0 = z0
+
+        self.x = x
+        self.y = y
+        self.z = z
+
+        self.fx = fx
+        self.fy = fy
+        self.fz = fz
+
+    def move_point(self, a, fraction=1.):
+        x = self.x + a*self.fx*fraction
+        y = self.y + a*self.fy*fraction
+        z = self.z + a*self.fz*fraction
+
+        # Force back to the sphere
+        d = np.sqrt(x**2 + y**2 + z**2)
+        x /= d
+        y /= d
+        z /= d
+
+        return x, y, z
+
+    def potential(self, a):
+        """
+        Calculate the potential moving the given point magnitude a
+        """
+        x, y, z = self.move_point(a)
+        dsq = (x-self.x0)**2 + (y-self.y0)**2 + (z-self.z0)**2
+        U = np.sum(1./np.sqrt(dsq))
+        return U
+
+
+def minimize_single(x0, y0, z0, index, fraction=1.):
+    """
+    minimize the potential by moving a single electron
+    """
+
+    npts = x0.size
+    sq_deg_on_sky = 360.**2/np.pi
+
+    # How many square degrees per point
+    res_sq_deg = sq_deg_on_sky/npts
+
+    # Expected distance between points
+    typical_dist_deg = np.sqrt(res_sq_deg)
+
+    # Dist between points. Shift size should be small compared to this.
+    typical_dist = np.radians(typical_dist_deg)
+
+    all_ind = np.arange(x0.size)
+    good = np.where(all_ind != index)
+
+    ex = x0[index] + 0
+    ey = y0[index] + 0
+    ez = z0[index] + 0
+
+    x0 = x0[good]
+    y0 = y0[good]
+    z0 = z0[good]
+
+    # Find the force on the single electon
+
+    dx = x0 - ex
+    dy = y0 - ey
+    dz = z0 - ez
+
+    dsq = dx**2 + dy**2 + dz**2
+    dist = np.sqrt(dsq)
+
+    # Force from each other electron
+    forces_mag = 1./dsq
+
+    fx = np.sum(forces_mag * dx/dist)
+    fy = np.sum(forces_mag * dy/dist)
+    fz = np.sum(forces_mag * dz/dist)
+
+    # subtract off the radial component
+    fx -= fx*ex
+    fy -= fy*ey
+    fz -= fz*ez
+
+    # normalize so the vector offset is similar to typical distance between points
+    f_tot = np.sqrt(fx**2+fy**2+fz**2) / typical_dist
+
+    fx /= f_tot
+    fy /= f_tot
+    fz /= f_tot
+
+    my_sphere = elec_sphere(x0, y0, z0, ex, ey, ez, fx, fy, fz)
+
+    # Need to make sure this doesn't go crazy and finds only the local minimum of shifting.
+    fit_amplitude = minimize(my_sphere.potential, 0.1, method='CG')
+
+    result = my_sphere.move_point(fit_amplitude.x, fraction=fraction)
+    return result
+
+
 def xyz2U(x, y, z):
     """
     compute the potential

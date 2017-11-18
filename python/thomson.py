@@ -174,6 +174,18 @@ def minimize_single(x0, y0, z0, index, fraction=1.):
     result = my_sphere.move_point(fit_amplitude.x, fraction=fraction)
     return result
 
+def minimize_global(npts=100):
+    """
+    setup a sphere of points and find the minimum using an N-body style iteration
+    """
+
+    # Make a fibonacci spiral on a sphere
+
+    # etc.
+
+
+    pass
+
 
 def xyz2U(x, y, z):
     """

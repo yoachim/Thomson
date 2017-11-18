@@ -192,6 +192,7 @@ def xyz2U(x, y, z):
     U = np.sum(1./d)
     return U
 
+
 def iterate_potential_smart(x0, stepfrac=0.1):
     """
     Calculate the change in potential by shifting points in theta and phi directions

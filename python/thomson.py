@@ -23,7 +23,7 @@ def elec_potential(x0):
     Parameters
     ----------
     x0 : array
-       First half of x0 or theta values, secnd half phi
+       First half of x0 are theta values, second half phi
 
     Returns
     -------
@@ -154,7 +154,7 @@ def minimize_single(x0, y0, z0, index, fraction=1.):
     fy = np.sum(forces_mag * dy/dist)
     fz = np.sum(forces_mag * dz/dist)
 
-    # subtract off the radial component
+    # subtract off the radial component of the force vector
     fx -= fx*ex
     fy -= fy*ey
     fz -= fz*ez

@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
 from lsst.sims.utils import _angularSeparation
-
+from scipy.optimize import OptimizeResult
 
 def thetaphi2xyz(theta, phi):
     x = np.sin(phi)*np.cos(theta)
@@ -34,6 +34,45 @@ def elec_potential(x0):
     phi = x0[x0.size/2:]
 
     x, y, z = thetaphi2xyz(theta, phi)
+    # Distance squared
+    dsq = 0.
+
+    indices = np.triu_indices(x.size, k=1)
+
+    for coord in [x, y, z]:
+        coord_i = np.tile(coord, (coord.size, 1))
+        coord_j = coord_i.T
+        d = (coord_i[indices]-coord_j[indices])**2
+        dsq += d
+
+    U = np.sum(1./np.sqrt(dsq))
+    return U
+
+
+def x0_split(x0):
+    size = x0.size
+    x = x0[0:int(size/3)]
+    y = x0[int(size/3):int(2*size/3)]
+    z = x0[int(2*size/3):]
+
+    return x, y, z
+
+
+def elec_potential_xyz(x0):
+    """
+    same as elec_potential, but pass in x,y,z coords
+    """
+
+    x, y, z = x0_split(x0)
+
+    # Enforce on a sphere?
+    r_sq = x**2 + y**2 + z**2
+    r = np.sqrt(r_sq)
+    x /= r
+    y /= r
+    z /= r
+
+
     # Distance squared
     dsq = 0.
 
@@ -113,6 +152,9 @@ class elec_sphere(object):
 def minimize_single(x0, y0, z0, index, fraction=1.):
     """
     minimize the potential by moving a single electron
+
+    # XXX--should this be vectorized? get the force vector for all the electrons simultaneously?
+    Then fit the amplitude for everything simultaneously? This might be easier to parallelize.
     """
 
     npts = x0.size
@@ -172,19 +214,55 @@ def minimize_single(x0, y0, z0, index, fraction=1.):
     fit_amplitude = minimize(my_sphere.potential, 0.1, method='CG')
 
     result = my_sphere.move_point(fit_amplitude.x, fraction=fraction)
+    # return the new x,y,z coord
     return result
 
-def minimize_global(npts=100):
-    """
-    setup a sphere of points and find the minimum using an N-body style iteration
+def minimize_global(fun, x0, args=(), maxfev=None, stepsize=0.5, maxiter=100, callback=None, **options):
     """
 
-    # Make a fibonacci spiral on a sphere
+    Parameters
+    ----------
+    stepsize : float (0.5)
+        The fraction of the bestfit amplitude to move each electron (guessing should be close to 0.5
+        to prevent overshooting solution)
 
-    # etc.
+    # Can have this return a scipy OptimizeResult object. Could fire up some ipyparallel
+    # engines and scatter-gather to speed things up.
+    https://docs.scipy.org/doc/scipy/reference/tutorial/optimize.html
 
+    """
 
-    pass
+    bestx = x0
+    besty = fun(x0)
+    funcalls = 1
+    niter = 0
+    improved = True
+    stop = False
+
+    while improved and not stop and niter < maxiter:
+        improved = False
+        niter += 1
+        x, y, z = x0_split(bestx)
+
+        # Note, this is a brutal loop over each electron, figuring out how to move it.
+        # Should be easy to scatter-gather this in parallel to get a big speedup.
+        # could potentially slowly crank down the stepsize as it iterates.
+        new_coords = [minimize_single(x, y, z, index, fraction=stepsize) for index in range(x.size)]
+        # reshape to be a single vector again
+        testx = np.array(new_coords).T.ravel()
+        testy = fun(testx)
+        if testy < besty:
+            besty = testy
+            bestx = testx
+            improved = True
+        if callback is not None:
+            callback(bestx)
+        if maxfev is not None and funcalls >= maxfev:
+            stop = True
+            break
+
+    return OptimizeResult(fun=besty, x=bestx, nit=niter, nfev=funcalls, success=(niter > 1))
+
 
 
 def xyz2U(x, y, z):
@@ -354,31 +432,8 @@ def even_points(npts, use_fib_init=True, method='CG', potential_func=elec_potent
     return theta, phi
 
 
-def elec_potential_xyz(x0):
-    x0 = x0.reshape(3, x0.size/3)
-    x = x0[0, :]
-    y = x0[1, :]
-    z = x0[2, :]
-    dsq = 0.
-
-    r = np.sqrt(x**2 + y**2 + z**2)
-    x = x/r
-    y = y/r
-    z = z/r
-    indices = np.triu_indices(x.size, k=1)
-
-    for coord in [x, y, z]:
-        coord_i = np.tile(coord, (coord.size, 1))
-        coord_j = coord_i.T
-        d = (coord_i[indices]-coord_j[indices])**2
-        dsq += d
-
-    U = np.sum(1./np.sqrt(dsq))
-    return U
-
-
 def x02sphere(x0):
-    x0 = x0.reshape(3, x0.size/3)
+    x0 = x0.reshape(3, int(x0.size/3))
     x = x0[0, :]
     y = x0[1, :]
     z = x0[2, :]

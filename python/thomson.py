@@ -217,7 +217,8 @@ def minimize_single(x0, y0, z0, index, fraction=1.):
     # return the new x,y,z coord
     return result
 
-def minimize_global(fun, x0, args=(), maxfev=None, stepsize=0.5, maxiter=100, callback=None, **options):
+def minimize_global(fun, x0, args=(), maxfev=None, stepsize=0.5, maxiter=100, callback=None, minstep=.1,
+                    **options):
     """
 
     Parameters
@@ -251,9 +252,14 @@ def minimize_global(fun, x0, args=(), maxfev=None, stepsize=0.5, maxiter=100, ca
         # reshape to be a single vector again
         testx = np.array(new_coords).T.ravel()
         testy = fun(testx)
+        # See if we got better
         if testy < besty:
             besty = testy
             bestx = testx
+            improved = True
+        # Didn't get better, but not at the smallest stepsize yet.
+        elif stepsize > minstep:
+            stepsize /= 2.
             improved = True
         if callback is not None:
             callback(bestx)
@@ -467,9 +473,9 @@ def even_points_xyz(npts, use_fib_init=True, method='CG', potential_func=elec_po
     # XXX--need to check if this is the best minimizer
     min_fit = minimize(potential_func, x, method='CG', options={'maxiter': maxiter}, callback=callback)
 
-    x = x02sphere(min_fit.x)
+    #x = x02sphere(min_fit.x)
 
     # Looks like I get the same energy values as https://en.wikipedia.org/wiki/Thomson_problem
-    return x
+    return min_fit
 
 

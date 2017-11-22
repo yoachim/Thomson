@@ -266,8 +266,11 @@ def minimize_global(fun, x0, args=(), maxfev=None, stepsize=0.5, maxiter=100, ca
         if maxfev is not None and funcalls >= maxfev:
             stop = True
             break
+    result = OptimizeResult(fun=besty, x=bestx, nit=niter, nfev=funcalls, success=(niter > 1))
+    # People hate it when I do this, but I love it!
+    result.stepsize = stepsize
 
-    return OptimizeResult(fun=besty, x=bestx, nit=niter, nfev=funcalls, success=(niter > 1))
+    return result
 
 
 
